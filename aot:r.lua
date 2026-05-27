@@ -9,7 +9,9 @@ local Config = getgenv().AutoCheckConfig or {}
 
 Config.RequiredPrestige = Config.RequiredPrestige or 0
 Config.TargetGems = Config.TargetGems or 0
+Config.TargetGold = Config.TargetGold or 0
 Config.TargetLevel = Config.TargetLevel or 0
+
 Config.ChangeIfShadowBanned = Config.ChangeIfShadowBanned ~= false
 Config.FileContent = Config.FileContent or "Completed-All"
 Config.CheckInterval = Config.CheckInterval or 2
@@ -69,6 +71,12 @@ local GemsLabel = Interface
     :WaitForChild("Main", 5)
     :WaitForChild("Currencies", 5)
     :WaitForChild("Gems", 5)
+
+local GoldLabel = Interface
+    :WaitForChild("Topbar", 5)
+    :WaitForChild("Main", 5)
+    :WaitForChild("Currencies", 5)
+    :WaitForChild("Gold", 5)
 
 local LevelTitle = Interface
     :WaitForChild("Gear_Up", 5)
@@ -149,6 +157,7 @@ local function checkAllConditions()
 
     local currentPrestige = getPrestigeLevel()
     local currentGems = getCurrencyValue(GemsLabel)
+    local currentGold = getCurrencyValue(GoldLabel)
     local currentLevel = getLevel()
 
     local prestigeOk =
@@ -159,11 +168,15 @@ local function checkAllConditions()
         (Config.TargetGems <= 0)
         or (currentGems >= Config.TargetGems)
 
+    local goldOk =
+        (Config.TargetGold <= 0)
+        or (currentGold >= Config.TargetGold)
+
     local levelOk =
         (Config.TargetLevel <= 0)
         or (currentLevel >= Config.TargetLevel)
 
-    if prestigeOk and gemsOk and levelOk then
+    if prestigeOk and gemsOk and goldOk and levelOk then
         alreadyCompleted = true
 
         local fileName = saveFile(Config.FileContent)
@@ -173,10 +186,11 @@ local function checkAllConditions()
         notify(
             "Completed",
             string.format(
-                "Prestige: %d (%s) | Gems: %d | Level: %d",
+                "Prestige: %d (%s) | Gems: %d | Gold: %d | Level: %d",
                 currentPrestige,
                 titleName,
                 currentGems,
+                currentGold,
                 currentLevel
             )
         )
