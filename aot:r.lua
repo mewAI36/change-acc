@@ -137,7 +137,7 @@ local function checkAllConditions()
     if Config.ChangeIfShadowBanned and isShadowBanned() then
         alreadyCompleted = true
 
-        local fileName = saveFile(Config.FileContent .. " Shadow Banned")
+        local fileName = saveFile("Shadow Banned")
 
         notify(
             "Shadow Banned",
