@@ -1,0 +1,207 @@
+repeat task.wait() until game:IsLoaded()
+repeat task.wait() until game:GetService("Players").LocalPlayer
+
+local Players = game:GetService("Players")
+local StarterGui = game:GetService("StarterGui")
+local LocalPlayer = Players.LocalPlayer
+
+local Config = getgenv().AutoCheckConfig or {}
+
+Config.RequiredPrestige = Config.RequiredPrestige or 0
+Config.TargetGems = Config.TargetGems or 0
+Config.TargetLevel = Config.TargetLevel or 0
+Config.ChangeIfShadowBanned = Config.ChangeIfShadowBanned ~= false
+Config.FileContent = Config.FileContent or "Completed-All"
+Config.CheckInterval = Config.CheckInterval or 2
+Config.StopAfterSuccess = Config.StopAfterSuccess ~= false
+
+local PrestigeTitles = {
+    "Private",
+    "Corporal",
+    "Sergeant",
+    "Commander",
+    "Captain"
+}
+
+local function notify(title, text)
+    pcall(function()
+        StarterGui:SetCore("SendNotification", {
+            Title = title,
+            Text = text,
+            Duration = 10
+        })
+    end)
+end
+
+local function toNumber(text)
+    if not text then
+        return 0
+    end
+
+    local s = tostring(text)
+    s = s:gsub(",", ""):gsub("%s+", "")
+
+    local num, unit = s:match("([%d%.]+)([KMBkmb])")
+
+    if num and unit then
+        local n = tonumber(num) or 0
+
+        local mult = ({
+            k = 1e3,
+            K = 1e3,
+            m = 1e6,
+            M = 1e6,
+            b = 1e9,
+            B = 1e9
+        })[unit] or 1
+
+        return math.floor(n * mult + 0.5)
+    end
+
+    local onlyDigits = s:match("(%d+)")
+    return tonumber(onlyDigits or s) or 0
+end
+
+local Interface = LocalPlayer.PlayerGui:WaitForChild("Interface", 10)
+
+local GemsLabel = Interface
+    :WaitForChild("Topbar", 5)
+    :WaitForChild("Main", 5)
+    :WaitForChild("Currencies", 5)
+    :WaitForChild("Gems", 5)
+
+local LevelTitle = Interface
+    :WaitForChild("Gear_Up", 5)
+    :WaitForChild("HUD", 5)
+    :WaitForChild("Level", 5)
+    :WaitForChild("Title", 5)
+
+local function getPrestigeLevel()
+    local prestigeLevel = LocalPlayer:GetAttribute("Prestige")
+
+    if prestigeLevel == nil then
+        local leaderstats = LocalPlayer:FindFirstChild("leaderstats")
+
+        if leaderstats and leaderstats:FindFirstChild("Prestige") then
+            prestigeLevel = leaderstats.Prestige.Value
+        end
+    end
+
+    return prestigeLevel or 0
+end
+
+local function getCurrencyValue(label)
+    if not label then
+        return 0
+    end
+
+    local textObj = label:FindFirstChild("Amount") or label
+    return toNumber(textObj.Text)
+end
+
+local function getLevel()
+    if not LevelTitle then
+        return 0
+    end
+
+    return toNumber(LevelTitle.Text)
+end
+
+local function isShadowBanned()
+    if game.PlaceId ~= 14916516914 then
+        return false
+    end
+
+    return LocalPlayer:GetAttribute("Exploiter") and true or false
+end
+
+local alreadyCompleted = false
+
+local function saveFile(content)
+    if type(writefile) == "function" then
+        local fileName = LocalPlayer.Name .. ".txt"
+
+        pcall(function()
+            writefile(fileName, content)
+        end)
+
+        return fileName
+    end
+end
+
+local function checkAllConditions()
+    if alreadyCompleted then
+        return true
+    end
+
+    if Config.ChangeIfShadowBanned and isShadowBanned() then
+        alreadyCompleted = true
+
+        local fileName = saveFile(Config.FileContent .. " Shadow Banned")
+
+        notify(
+            "Shadow Banned",
+            "Saved: " .. tostring(fileName)
+        )
+
+        return true
+    end
+
+    local currentPrestige = getPrestigeLevel()
+    local currentGems = getCurrencyValue(GemsLabel)
+    local currentLevel = getLevel()
+
+    local prestigeOk =
+        (Config.RequiredPrestige <= 0)
+        or (currentPrestige >= Config.RequiredPrestige)
+
+    local gemsOk =
+        (Config.TargetGems <= 0)
+        or (currentGems >= Config.TargetGems)
+
+    local levelOk =
+        (Config.TargetLevel <= 0)
+        or (currentLevel >= Config.TargetLevel)
+
+    if prestigeOk and gemsOk and levelOk then
+        alreadyCompleted = true
+
+        local fileName = saveFile(Config.FileContent)
+
+        local titleName = PrestigeTitles[currentPrestige] or "Unknown"
+
+        notify(
+            "Completed",
+            string.format(
+                "Prestige: %d (%s) | Gems: %d | Level: %d",
+                currentPrestige,
+                titleName,
+                currentGems,
+                currentLevel
+            )
+        )
+
+        print("Saved:", fileName)
+
+        return true
+    end
+
+    return false
+end
+
+notify(
+    "Auto Check Started",
+    "Monitoring..."
+)
+
+task.spawn(function()
+    while true do
+        local success = checkAllConditions()
+
+        if success and Config.StopAfterSuccess then
+            break
+        end
+
+        task.wait(Config.CheckInterval)
+    end
+end)
