@@ -5,11 +5,17 @@ local Players = game:GetService("Players")
 local StarterGui = game:GetService("StarterGui")
 local LocalPlayer = Players.LocalPlayer
 
--- Nhận Config từ Loader bắn sang (Nếu không có thì xài mặc định)
+-- ==================================================
+-- ⚙️ CẤU HÌNH (Lấy từ genv hoặc dùng mặc định)
+-- ==================================================
 local Config = getgenv().AutoCheckConfig or {}
 Config.TargetFamilies = Config.TargetFamilies or {"yeager", "ackerman", "reiss", "tybur", "arlet"}
 Config.TargetSpin = Config.TargetSpin or 0
 Config.CheckInterval = Config.CheckInterval or 1
+
+-- Thêm 2 cấu hình vòng lặp xác thực theo yêu cầu của mày
+Config.ConfirmCount = Config.ConfirmCount or 2       -- Số lần check lại để confirm
+Config.ConfirmInterval = Config.ConfirmInterval or 45 -- Số giây loop check giữa các lần confirm
 
 local function notify(title, text)
     pcall(function()
@@ -81,6 +87,9 @@ local function getMatchedFamilies()
     return matched
 end
 
+-- ==================================================
+-- LOGIC KIỂM TRA CHÍNH (VÒNG LẶP XÁC THỰC NÂNG CẤP)
+-- ==================================================
 local alreadyCompleted = false
 
 local function checkAllConditions()
@@ -88,30 +97,54 @@ local function checkAllConditions()
 
     local rollsLeft = getRollCount()
 
+    -- KIỂM TRA LẦN ĐẦU: Nếu rớt xuống mốc Roll mục tiêu
     if rollsLeft <= Config.TargetSpin then
-        alreadyCompleted = true
-        
-        local finalFamilies = getMatchedFamilies()
-        local fileContent = "Completed-Done"
+        print("⚠️ Phát hiện đạt mốc " .. Config.TargetSpin .. " Roll. Kích hoạt chuỗi loop confirm...")
+        notify("Xác Thực Kép", "Bắt đầu chuỗi check lại " .. Config.ConfirmCount .. " lần...")
 
-        if #finalFamilies > 0 then
-            fileContent = fileContent .. "_" .. table.concat(finalFamilies, ", ")
+        local confirmedAll = true
+
+        -- Vòng lặp loop check xác thực
+        for i = 1, Config.ConfirmCount do
+            print("⏳ Đang đợi " .. Config.ConfirmInterval .. "s cho lần confirm thứ [" .. i .. "/" .. Config.ConfirmCount .. "]")
+            task.wait(Config.ConfirmInterval)
+
+            -- Đọc lại số roll sau khi đợi
+            local currentCheck = getRollCount()
+            if currentCheck > Config.TargetSpin then
+                print("🔄 Lần confirm thứ " .. i .. " thất bại (Roll hiện tại: " .. currentCheck .. "). Hủy chuỗi xác thực, quay lại loop gác chính.")
+                confirmedAll = false
+                break -- Thất bại phát là bẻ gãy vòng lặp ngay, không đợi phí thời gian nữa
+            end
         end
 
-        local fileName = saveFile(fileContent)
+        -- Nếu vượt qua toàn bộ các bài kiểm tra (Không bị gán sai)
+        if confirmedAll then
+            print("✅ Đã vượt qua toàn bộ chuỗi confirm! Tiến hành chốt sổ...")
+            alreadyCompleted = true
+            
+            local finalFamilies = getMatchedFamilies()
+            local fileContent = "Completed-Done"
 
-        notify(
-            "Auto Check Chốt Sổ!",
-            "Số Roll: " .. rollsLeft .. "\nLưu vào: " .. tostring(fileName)
-        )
-        print("✅ Đã lưu file: " .. tostring(fileName) .. " | Nội dung: " .. fileContent)
-        
-        return true 
+            if #finalFamilies > 0 then
+                fileContent = fileContent .. "_" .. table.concat(finalFamilies, ", ")
+            end
+
+            local fileName = saveFile(fileContent)
+
+            notify("Completed!", "Đã chốt sổ acc thành công!")
+            print("✅ Đã lưu file: " .. tostring(fileName) .. " | Nội dung: " .. fileContent)
+            
+            return true -- Thoát loop gác ngầm hoàn toàn
+        end
     end
 
     return false
 end
 
+-- ==================================================
+-- CHẠY VÒNG LẶP GIÁM SÁT
+-- ==================================================
 notify("Radar Đã Bật", "Đang giám sát mốc Roll: " .. Config.TargetSpin)
 
 task.spawn(function()
@@ -120,4 +153,3 @@ task.spawn(function()
         task.wait(Config.CheckInterval)
     end
 end)
-
