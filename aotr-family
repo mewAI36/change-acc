@@ -1,0 +1,123 @@
+repeat task.wait() until game:IsLoaded()
+repeat task.wait() until game:GetService("Players").LocalPlayer
+
+local Players = game:GetService("Players")
+local StarterGui = game:GetService("StarterGui")
+local LocalPlayer = Players.LocalPlayer
+
+-- Nhận Config từ Loader bắn sang (Nếu không có thì xài mặc định)
+local Config = getgenv().AutoCheckConfig or {}
+Config.TargetFamilies = Config.TargetFamilies or {"yeager", "ackerman", "reiss", "tybur", "arlet"}
+Config.TargetSpin = Config.TargetSpin or 0
+Config.CheckInterval = Config.CheckInterval or 1
+
+local function notify(title, text)
+    pcall(function()
+        StarterGui:SetCore("SendNotification", {
+            Title = title,
+            Text = text,
+            Duration = 10
+        })
+    end)
+end
+
+local function saveFile(content)
+    if type(writefile) == "function" then
+        local fileName = LocalPlayer.Name .. ".txt"
+        pcall(function()
+            writefile(fileName, content)
+        end)
+        return fileName
+    end
+end
+
+local function getRollCount()
+    local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
+    local titleLabel = playerGui 
+        and playerGui:FindFirstChild("Interface")
+        and playerGui.Interface:FindFirstChild("Customisation")
+        and playerGui.Interface.Customisation:FindFirstChild("Family")
+        and playerGui.Interface.Customisation.Family:FindFirstChild("Buttons_2")
+        and playerGui.Interface.Customisation.Family.Buttons_2:FindFirstChild("Roll")
+        and playerGui.Interface.Customisation.Family.Buttons_2.Roll:FindFirstChild("Title")
+
+    if titleLabel and titleLabel:IsA("TextLabel") then
+        local numberStr = string.match(titleLabel.Text, "%d+")
+        return numberStr and tonumber(numberStr) or 0
+    end
+    
+    return 99999 
+end
+
+local function getMatchedFamilies()
+    local matched = {}
+    local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
+    local families = playerGui 
+        and playerGui:FindFirstChild("Interface")
+        and playerGui.Interface:FindFirstChild("Customisation")
+        and playerGui.Interface.Customisation:FindFirstChild("Storage")
+        and playerGui.Interface.Customisation.Storage:FindFirstChild("Main")
+        and playerGui.Interface.Customisation.Storage.Main:FindFirstChild("Families")
+    
+    if not families then return matched end
+
+    for _, child in ipairs(families:GetChildren()) do
+        local inner = child:FindFirstChild("Inner")
+        local titleLabel = inner and inner:FindFirstChild("Title")
+        
+        if titleLabel and titleLabel:IsA("TextLabel") then
+            local currentText = titleLabel.Text
+            local lowerText = string.lower(currentText)
+            
+            for _, target in ipairs(Config.TargetFamilies) do
+                if string.find(lowerText, string.lower(target)) then
+                    table.insert(matched, currentText)
+                    break 
+                end
+            end
+        end
+    end
+    
+    return matched
+end
+
+local alreadyCompleted = false
+
+local function checkAllConditions()
+    if alreadyCompleted then return true end
+
+    local rollsLeft = getRollCount()
+
+    if rollsLeft <= Config.TargetSpin then
+        alreadyCompleted = true
+        
+        local finalFamilies = getMatchedFamilies()
+        local fileContent = "Completed-Done"
+
+        if #finalFamilies > 0 then
+            fileContent = fileContent .. "_" .. table.concat(finalFamilies, ", ")
+        end
+
+        local fileName = saveFile(fileContent)
+
+        notify(
+            "Auto Check Chốt Sổ!",
+            "Số Roll: " .. rollsLeft .. "\nLưu vào: " .. tostring(fileName)
+        )
+        print("✅ Đã lưu file: " .. tostring(fileName) .. " | Nội dung: " .. fileContent)
+        
+        return true 
+    end
+
+    return false
+end
+
+notify("Radar Đã Bật", "Đang giám sát mốc Roll: " .. Config.TargetSpin)
+
+task.spawn(function()
+    while true do
+        if checkAllConditions() then break end
+        task.wait(Config.CheckInterval)
+    end
+end)
+
